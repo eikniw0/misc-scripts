@@ -1,3 +1,9 @@
 [submodule "external/spark"]
 	path = external/spark
 	url = https://github.com/holman/spark
+[submodule "external/bashtop"]
+	path = external/bashtop
+	url = https://github.com/aristocratos/bashtop
+[submodule "external/pipes.sh"]
+	path = external/pipes.sh
+	url = https://github.com/pipeseroni/pipes.sh
