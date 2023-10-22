@@ -1,0 +1,3 @@
+[submodule "spark"]
+	path = external/spark
+	url = git://github.com/holman/spark.git
