@@ -1,0 +1,238 @@
+#!/system/bin/env bash
+
+. ~/etc/functions.d/msg.sh
+. ~/etc/functions.d/debug.sh
+
+_strict on
+
+OUT='/sdcard/adbfu.log'
+ADB_SHELL=''
+MODE=''
+USER="${USER:-`whoami`}"
+PKGS=''
+
+_cleanup() {
+	unset ADB_SHELL
+	unset _pm rmpkg
+  exit
+}
+
+_pm() {
+	adb shell pm "$@" 2>>$OUT
+}
+
+list_permissions() {
+	case "${1:-fuckit}" in
+		sys*)
+			_pm list permissions | sed 's,^permission:,,' | sort
+			;;
+		*)
+			;;
+	esac
+}
+
+list_packages() {
+	local pm_arg=''
+
+	case "${1:-all}" in
+		sys*)
+			pm_arg='-s' ;;
+		user)
+			pm_arg='-3' ;;
+		*)
+			;;
+	esac
+
+	_pm list packages $pm_arg | sed 's,^package:,,' | sort
+}
+
+list_system_pkgs() {
+  _pm list packages -s | sed 's,^package:,,' | sort
+}
+
+get_user_ids() {
+	_pm list users | \
+		grep 'UserInfo' | \
+		sed 's,^.*Info{\([0-9]*\):.*:.*}.*$,\1,'
+}
+
+get_user_name() {
+	local users="$(get_user_ids)"
+	local user
+
+	for user in $users; do
+		read num name <<< $(_pm list users | \
+				grep 'UserInfo' | \
+				sed 's,^.*Info{\([0-9]*\):\([A-Za-z].*[A-Za-z]\):c[0-9]*}.*$,\1 \2,')
+
+		if [ $num -eq $1 ]; then
+		# Found it
+		 	echo "$name"
+		 	break
+		fi
+	done
+}
+
+get_pkg_label() {
+  [[ $# -eq 1 ]] || return 1
+
+  local pkgname="$1"
+  local pkgpath="$(_pm path $pkgname | \
+                   sed 's,^package:,,')"
+
+  _nofail -s adb pull "$pkgpath" "$pkgname.apk"
+
+  aapt d badging $pkgname.apk | \
+    grep '^application-label:' | \
+    sed 's,^application-label:.\(.*\).$,\1,'
+
+  rm -f "$pkgname.apk"
+}
+
+get_pkg_labels() {
+  local pkgname label
+
+  trap '_cleanup' INT HUP QUIT KILL EXIT
+
+  for pkgname in "$@"; do
+    label="$(get_pkg_label $pkgname)" || continue
+#    if [ $(tput colors) -ge 8 ]; then
+#      _msg "$bold$mag$pkgname$rst='$label'\n"
+#    else
+      _msg "$pkgname='$label'\n"
+#    fi
+  done  
+}
+
+clear_caches() {
+  _info "wiping system-wide cache"
+  _pm trim-caches $((1024*1024*1024*512)) &>/dev/null || true
+  _success
+
+  echo
+
+  _msg "$bold${cyn}removing app cache/dex files...\n"
+  for pkg in $(list_packages); do
+    case $pkg in
+      android*)
+        continue ;;
+    esac
+
+    _info "$pkg"
+#    _pm clear --user 0 --cache-only $pkg &>/dev/null || true
+    _pm delete-dexopt $pkg &>/dev/null || true
+    _pm compile -f -m space-profile $pkg &>/dev/null || true
+    _pm reconcile-secondary-dex-files $pkg &>/dev/null || true
+    _success
+  done
+}
+
+remove_package() {
+	[[ $# -eq 1 ]] || return 1
+
+#	local system_apps user_apps users user
+#	system_apps="$(list_packages system)"
+#	user_apps="$(list_packages user)"
+	local pkg="$1"
+
+#	for pkg in "$@"; do
+#		if [ -n "$(echo $system_apps | grep $pkg)" ]; then
+			# We have a system app
+			_msg "${bold}removing $blu$pkg\n"
+
+			_info "uninstalling updates"
+			_pm uninstall-system-updates "$pkg" &>/dev/null || true
+      _success
+
+      _info "resetting permissions"
+			_pm reset-permissions "$pkg" &>/dev/null || true
+			_pm clear "$pkg" &>/dev/null || true
+			_success
+
+			for user in $(get_user_ids); do
+				_info "disabling for user $user"
+				_pm uninstall -k --user "$user" "$pkg" &>/dev/null || true
+				_pm disable-user --user "$user" "$pkg" &>/dev/null || true
+				_success
+			done
+
+#		elif [ -n "$(echo $user_apps | grep $pkg)" ]; then
+#			# user app found
+#			msg -n "${bold}uninstalling user package ${cyn}$pkg"
+#			pm uninstall "$pkg"
+#			msg " - ${grn}done"
+#		else
+#			msg "$cyn$pkg not found"
+#		fi
+
+		echo
+#	done
+}
+
+remove_packages() {
+	local pkg
+	for pkg in "$@"; do
+		remove_package "$pkg"
+	done
+}
+
+
+################################
+################################
+## START OF THE ACTUAL SCRIPT ##
+################################
+################################
+if [ "${USER}" = 'shell' -o "$USER" = 'root' ]; then
+	ADB_SHELL=1
+else
+	ADB_SHELL=0
+fi
+
+while [ -n "${1:-}" ]; do
+	case $1 in
+    clea*)
+      MODE='clear'
+      shift 1
+      ;;
+    list)
+      MODE='list'
+      MODE_SUB="$2"
+      shift 2
+      ;;
+		rm|remove)
+			MODE='remove'
+			shift 1
+			;;
+    label)
+      MODE='label'
+      shift 1
+      ;;
+		-*)
+			exit 255
+			;;
+		*)
+			PKGS="$PKGS $1"
+			shift 1
+			;;
+	esac
+done
+
+case "$MODE" in
+  clear)
+    clear_caches
+    ;;
+  list)
+    list_packages $MODE_SUB
+    ;;
+  label)
+    get_pkg_labels $PKGS
+    ;;
+	remove)
+		remove_packages $PKGS
+		;;
+	*)
+		exit 237
+		;;
+esac
+
+# vim: ts=2 sw=2 ft=bash ai
