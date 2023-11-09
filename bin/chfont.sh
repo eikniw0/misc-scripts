@@ -1,6 +1,6 @@
 #!/system/bin/env bash
 
-. ~/etc/scripts/terminal.sh || exit 255
+. ~/etc/functions.d/msg.sh || exit 255
 
 [[ $# -eq 1 ]] || exit 237
 
@@ -10,14 +10,8 @@ if [ -f "$1" ]; then
 	name=${name/NerdFont}
 	weight=${name/*-}
 	name=${name/-*}
-	info_msg
-	info_msg "Installing Termux font ..."
-	info_msg "${cyn}Font name${wht}: $mag$name"
-	info_msg "${cyn}Weight${wht}: $mag$weight"
-	info_msg
-	info_msg "5 seconds to cancel..."
-	info_msg
-	sleep 5
+    _info "Installing $blu$name$wht ($mag$weight$wht)$dim..."
 	cp -f "$1" ~/.termux/font.ttf
 	termux-reload-settings
+    _success
 fi
