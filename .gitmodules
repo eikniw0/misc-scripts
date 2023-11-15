@@ -1,9 +1,0 @@
-[submodule "bin/external/bashtop"]
-	path = bin/external/bashtop
-	url = https://github.com/aristocratos/bashtop
-[submodule "bin/external/pipes.sh"]
-	path = bin/external/pipes.sh
-	url = https://github.com/pipeseroni/pipes.sh.git
-[submodule "bin/external/spark"]
-	path = bin/external/spark
-	url = https://github.com/holman/spark

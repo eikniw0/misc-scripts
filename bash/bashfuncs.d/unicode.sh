@@ -3,7 +3,7 @@
 [[ -n "${__UNICODE_SH:-}" ]] && return
 __UNICODE_SH=1
 
-FUNCTIONS_ROOT="$HOME/etc/functions.d"
+FUNCTIONS_ROOT="$HOME/etc/bashfuncs.d"
 . "$FUNCTIONS_ROOT/colors.sh" || exit 1
 
 

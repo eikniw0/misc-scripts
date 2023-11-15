@@ -10,6 +10,7 @@ ADB_SHELL=''
 MODE=''
 USER="${USER:-`whoami`}"
 PKGS=''
+DEBUG=${DEBUG:-0}
 
 _cleanup() {
 	unset ADB_SHELL
@@ -18,6 +19,7 @@ _cleanup() {
 }
 
 _pm() {
+  (( DEBUG )) && _msg "$bold${red}EXEC${wht}  pm $@\n"
 	adb shell pm "$@" 2>>$OUT
 }
 
@@ -119,7 +121,7 @@ clear_caches() {
     esac
 
     _info "$pkg"
-#    _pm clear --user 0 --cache-only $pkg &>/dev/null || true
+    _pm clear --user 0 --cache-only $pkg &>/dev/null || true
     _pm delete-dexopt $pkg &>/dev/null || true
     _pm compile -f -m space-profile $pkg &>/dev/null || true
     _pm reconcile-secondary-dex-files $pkg &>/dev/null || true

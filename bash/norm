@@ -1,0 +1,1 @@
+for i in *.tar*; do case $i in *.xz) unxz -v $i; i=${i/.xz} ;; *.bz2) bunzip2 -v $i; i=${i/.bz2} ;; *.gz) pigz -d -v $i; i=${i/.gz} ;; *) _error "Unknown file type: $i" ;; esac; zstd -v -19 -T8 $i && rm -f $i && echo "$i.zst successfully created!"; done

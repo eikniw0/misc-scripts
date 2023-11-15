@@ -3,12 +3,20 @@
 [[ -n "${__MSG_SH:-}" ]] && return
 __MSG_SH=1
 
-FUNCTIONS_ROOT="$HOME/etc/functions.d"
+FUNCTIONS_ROOT="$HOME/etc/bashfuncs.d"
 . "$FUNCTIONS_ROOT/colors.sh" || exit 1
 
 
 _msg() {
   printf "${rst}%b${rst}" "$@"
+}
+
+print() {
+  builtin printf "${rst}%b${rst}" "$@"
+}
+
+msg() {
+  print "$@\n"
 }
 
 _info() {

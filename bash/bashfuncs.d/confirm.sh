@@ -3,7 +3,7 @@
 [[ -n "${__NORMALIZE_SH:-}" ]] && return
 __NORMALIZE_SH=1
 
-FUNCTIONS_ROOT="$HOME/etc/functions.d"
+FUNCTIONS_ROOT="$HOME/etc/bashfuncs.d"
 . "$FUNCTIONS_ROOT/msg.sh" || exit 1
 
 declare -ga INPUTS=()

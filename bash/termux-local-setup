@@ -1,0 +1,157 @@
+#!/system/bin/env bash
+
+FUNC_DIR=~/etc/functions.d; export FUNC_DIR
+. "$FUNC_DIR/msg.sh" || exit 1
+#. "$FUNC_DIR/confirm.sh" || exit 1
+. "$FUNC_DIR/debug.sh" || exit 1
+
+_strict on
+
+declare -ga PKGS=()
+
+INSTALL_PYTHON=1
+INSTALL_PACMAN=1
+INSTALL_TOR=0
+
+REPOS=(root-repo
+       x11-repo
+       tur-repo)
+
+BASE_PKGS=(vim
+           less
+           man
+           git
+           texinfo
+           update-info-dir
+           patchelf
+           ncftp
+           ncurses-utils
+           perl
+           build-essential
+           ninja
+           cmake
+           cmake-curses-gui
+           proot
+           proot-distro
+           fakeroot
+           bash-completion
+           zsh
+           zsh-completions
+           openssh
+           termux-api
+           termux-services
+           vivid
+           fortune
+           ccache)
+
+PKGS=(apt-file
+      elinks
+      gettext
+      libtool
+      autoconf
+      automake
+      clang
+      binutils
+      binutils-gold
+      llvmgold
+      mold
+      shellcheck
+      hstr
+      make-guile
+      guile
+      gh
+      anacron
+      graphviz
+      doxygen
+      libxml2-utils
+      xmlto
+      )
+
+PYTHON_PKGS=(python
+             python-pip
+             python-ensurepip-wheels)
+
+PY3_MODULES=(psutil
+             meson
+             portage)
+
+RB_GEMS=(fpm)
+
+# Termux Package Manager
+pm_update() {
+  [[ -n "${TERMUX_APP__PACKAGE_MANAGER:-}" ]] || return 1
+
+  if [ "$TERMUX_APP__PACKAGE_MANAGER" = 'apt' ]; then
+    _nofail apt-get update
+    _nofail apt-get full-upgrade -y
+  else
+    _nofail pacman -Syu
+  fi
+}
+
+pm_install() {
+  [[ -n "${TERMUX_APP__PACKAGE_MANAGER:-}" ]] || return 1
+
+  if [ "$TERMUX_APP__PACKAGE_MANAGER" = 'apt' ]; then
+    _nofail apt-get install -y "$@"
+  else
+    _nofail pacman -S --noconfirm \
+      --overwrite '*/data/*' "$@"
+  fi
+}
+
+pm_update
+
+for repo in ${REPOS[@]} ; do
+  pm_install "$repo"
+done
+
+pm_install libtree-ldd
+ln -sfv libtree $PREFIX/bin/ldd
+
+for bin in toybox file mount umount losetup; do
+	ln -sfv /system/bin/$bin $PREFIX/bin/$bin
+done
+
+cat > $PREFIX/bin/egrep << 'eof'
+#!/system/bin/sh
+exec grep -E "$@"
+eof
+cat > $PREFIX/bin/fgrep << 'eof'
+#!/system/bin/sh
+exec grep -F "$@"
+eof
+chmod +x $PREFIX/bin/{e,f}grep
+
+
+if (( INSTALL_PACMAN )); then
+	pm_install pacman
+
+	if [ ! -d "$PREFIX/etc/pacman.d/gnupg" ]; then
+		_nofail pacman-key --init
+		_nofail pacman-key --populate
+	fi
+
+	_nofail pacman -Syu
+fi
+
+
+for pkg in ${BASE_PKGS[@]} ; do
+	pm_install "$pkg"
+done
+
+if (( INSTALL_PYTHON )); then
+  for pkg in ${PYTHON_PKGS[@]} ; do
+    pm_install "$pkg"
+  done
+
+  for module in ${PY3_MODULES[@]} ; do
+    pip install "$module"
+  done
+fi
+
+if (( INSTALL_TOR )); then
+	pm_install tor apt-transport-tor
+fi
+
+# vim: ts=2 sw=2 ft=bash

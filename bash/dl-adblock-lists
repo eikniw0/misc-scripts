@@ -1,0 +1,23 @@
+#!/system/bin/env bash
+#
+# dl-adblock-lists.sh
+#
+# grab a number of different ad-blocking lists from around the net,
+# and process them into a single usable hosts file.
+# 
+# credits to adguard for most (if not all) of these links.
+#
+
+GIT_URLS=('https://github.com/AdguardTeam/AdguardFilters'
+          'https://gitlab.com/malware-filter/urlhaus-filter'
+          )
+
+dl_git_lists() {
+    local url
+
+    for url in ${GIT_URLS[@]}; do
+        git clone --depth 1 "$url"
+    done
+}
+
+# vim: ts=4 sw=4 ft=bash et ai

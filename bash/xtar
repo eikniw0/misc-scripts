@@ -3,7 +3,7 @@
 [[ -n "${__XTAR_SH:-}" ]] && return
 __XTAR_SH=1
 
-FUNCTIONS_ROOT="$HOME/etc/functions.d"
+FUNCTIONS_ROOT="$HOME/etc/bashfuncs.d"
 . "$FUNCTIONS_ROOT/msg.sh" || exit 1
 . "$FUNCTIONS_ROOT/debug.sh" || exit 1
 

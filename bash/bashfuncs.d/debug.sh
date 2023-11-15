@@ -3,7 +3,7 @@
 #[[ -n "${__EXAMPLE_SH:-}" ]] && return
 #__EXAMPLE_SH=1
 #
-#FUNCTIONS_ROOT="$HOME/etc/functions.d"
+#FUNCTIONS_ROOT="$HOME/etc/bashfuncs.d"
 #. "$FUNCTIONS_ROOT/msg.sh" || exit 1
 #
 

@@ -3,7 +3,7 @@
 [[ -n "${__COLORS_SH:-}" ]] && return
 __COLORS_SH=1
 
-FUNCTIONS_ROOT="$HOME/etc/functions.d"
+FUNCTIONS_ROOT="$HOME/etc/bashfuncs.d"
 # source "$FUNCTIONS_ROOT/print.sh" || exit 1
 
 
