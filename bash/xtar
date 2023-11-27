@@ -1,140 +1,133 @@
 #!/system/bin/env bash
 
-[[ -n "${__XTAR_SH:-}" ]] && return
-__XTAR_SH=1
+fatal() {
+	printf "\e[1;41;37m FATAL ERROR \e[m \e[1m$@\n"
+	exit 1
+}
 
-FUNCTIONS_ROOT="$HOME/etc/bashfuncs.d"
-. "$FUNCTIONS_ROOT/msg.sh" || exit 1
-. "$FUNCTIONS_ROOT/debug.sh" || exit 1
+SCRIPTS_ROOTDIR="$HOME/etc/bash/functions.d"
+. "$SCRIPTS_ROOTDIR"/msg.sh &>/dev/null || fatal "'msg.sh' not found"
+. "$SCRIPTS_ROOTDIR"/spinner.sh &>/dev/null || fatal "'spinner.sh' not found"
 
-_strict on
 
-declare -a INPUTS=()
-declare -i COMP_LVL=19  # default is 3
-declare -i KEEP_INPUT=0
-declare -i VERBOSE=0
 
 usage() {
-	_msg "Usage: $(basename $0) [-<1-19>] [-k] <INPUT> [INPUT2] ...\n" >&2
+	msg "Usage: $(basename $0) [-<1-19>] [-k] [-p] <INPUT> [INPUT2] ...\n" >&2
+	exit ${1:-}
 }
 
 cleanup() {
-	if (( completed )); then
+	if [ ${completed:-0} -eq 1 ]; then
 		if [ -n "${base:-}" ]; then
 			rm -f "$base.tar" "$base.git.tar"
 		fi
 	else
+		if [ -n "${base:-}" ]; then
 		rm -f "$base.tar" "$base.git.tar" "$base.tar.zst" "$base.git.tar.zst"
+		fi
 	fi
 }
 trap cleanup EXIT
 
-process_input() {
-	local input="$1"
-	local base="$(basename $input)"
-	local dir="$(dirname $input)"
-	local startdir="$(pwd)"
-	local finalsize=''
-	declare -gi completed=0
 
-	_msg "${bold}processing input '$cyn$base$wht'$rst...\n"
+# parse_input takes an arg like "adguard" and expands it into
+# all the files that will be moved, then caling out for the
+# rest.
+parse_input() {
+	test -n "${1:-}" || fatal "parse_input called with no args!"
 
-	[[ "$dir" = '.' ]] || cd "$dir"
+	local input="${1%/}"
+	local dirname="$(dirname $input)"
 
-	if [ -d "$base"/.git ]; then
-		case "$base" in
-				*.git)
-				;;
-			*)
-				_info "renaming '$cyn$base$wht' to '$cyn$base$wht.git'"
-				_nofail mv -f "$base" "$base.git"
-				base="$base.git"
-				_success
-				;;
-		esac
+	if (( $INC_PATH )); then
+		local src_dir="$input"
+		# Replace slashes with dashes & make lowercase
+		local new_base="$(echo ${input/\/-} | tr A-Z a-z)"
 	else
-		case "$base" in
-			*.git)
-				_info "renaming '$cyn$base$wht' to '$cyn${base/.git}$wht'\n"
-				_nofail mv -f "$base" "${base/.git}"
-				base="${base/.git}"
-				_success
-				;;
-			*)
-				;;
-		esac
+		local src_dir="$(basename $input)"
+		local new_base="$(basename $input | tr A-Z a-z)"
 	fi
 
-	_info "creating tarball '$cyn$base.tar$wht'"
-	tar --sort=name \
-	    --preserve-permissions \
-	    --same-owner \
-	    --xattrs \
-	    --xattrs-include='*.*' \
-	    --create \
-	    --file "$base.tar" \
-	    "$base" || \
-			    _fatal "tar failed"
-	_success
+	(( INC_PATH )) || cd "$dirname"
 
-	uncompressed_size="$(ls -lh $base.tar | awk '{print $5}')"
+	# Gotta be a better way...
+	printf " $save   '$src_dir' --> '$new_base.tar.zst'"
+	spin create_tarball "$src_dir" "$new_base"
+	echo
+#	finalsize="$(ls -lh $new_base.tar.zst | awk '{print $5}')"
+#	msg "  final size: $mag$finalsize$wht ($cyn$new_base.tar.zst$wht)"
+#	echo
 
-	_info "compressing '$cyn$base.tar$wht' with '${red}zstd -$COMP_LVL$rst'"
-	zstd -$COMP_LVL \
-	     --threads=0 \
+	(( INC_PATH )) || cd "$dirname"
+}
+
+
+create_tarball() {
+	local list="$(mktemp $TMPDIR/xtar-XXXXXXX.list)"
+	find "$1" -not -type f >"$list" 2>/dev/null
+	tar \
+		--preserve-permissions \
+		--same-owner \
+		--xattrs \
+		--xattrs-include='*.*' \
+		--create \
+		--file "$1.tar" \
+		--files-from "$list" \
+		    || fatal "tar failed"
+
+	zstd -$C_LVL \
+    	 --threads=0 \
 	     --quiet \
 	     --force \
 	     --rm \
-	     "$base.tar" || \
-			     _fatal "zstd failed\n"
-	completed=1
-	_success
+	     "$1.tar" \
+		 		|| fatal "zstd failed"
 
-	if ! (( KEEP_INPUT )); then
-		_info "removing '$blu$base/$wht' directory"
-		rm -rf "$base/" || _fatal "rm failed\n"
-		_success
+	if (( RM_SRC )); then
+		rm -rf "$1" || fatal "rm failed"
 	fi
-
-	finalsize="$(ls -lh $base.tar.zst | awk '{print $5}')"
-	_msg " $dim[$bold$ylw☆$rst$dim]$rst uncompressed size: $mag$uncompressed_size$wht ($cyn$base.tar.zst$wht)\n"
-	_msg " $dim[$bold$grn☆$rst$dim]$rst final size: $mag$finalsize$wht ($cyn$base.tar.zst$wht)\n"
-
-	echo
-
-	[[ "$dir" = '.' ]] || cd "$startdir"
+	rm -f "$list"
 }
+
+#	finalsize="$(ls -lh $base.tar.zst | awk '{print $5}')"
+#	msg "  final size: $mag$finalsize$wht ($cyn$base.tar.zst$wht)"
+
+[ $# -eq 0 ] && usage
+
+INPUTS=()
+C_LVL=15	# still pretty quick imho
+RM_SRC=0
+INC_PATH=0
 
 while [ -n "${1:-}" ]; do
 	case "$1" in
 		-h|--help)
-			usage
-			exit 0
+			usage 0
 			;;
-		-[1-9]|-1[0-9])
-			COMP_LVL=${1/-}
-			shift 1
+		-[1-9]*)
+			C_LVL=${1%-}
 			;;
-		-k|--keep)
-			KEEP_INPUT=1
-			shift 1
+		-r|--remove)
+			RM_SRC=1
+			;;
+		-p|--path)
+			INC_PATH=1
 			;;
 		-*)
-			_fatal "Invalid argument: '$1'\n"
+			fatal "Invalid argument: '$1'"
 			;;
 		*)
 			INPUTS+=("$1")
-			shift 1
 			;;
 	esac
+	shift 1
 done
 
-if [ ${#INPUTS[@]} -eq 0 ]; then
-	_fatal "No input files given.\n"
-fi
+[ ${#INPUTS[@]} -eq 0 ] \
+	&& fatal "No input files given."
 
-for input in ${INPUTS[@]}; do
-	process_input "$input"
+for input in "${INPUTS[@]}"; do
+	parse_input "$input"
 done
 
-# vim: ts=2 sw=2 noet ai ft=bash
+# vim: ft=bash ts=4 sw=4 noet ai

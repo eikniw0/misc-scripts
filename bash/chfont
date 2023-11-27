@@ -1,6 +1,6 @@
 #!/system/bin/env bash
 
-. ~/etc/functions.d/msg.sh || exit 255
+. ~/etc/bash/functions.d/msg.sh || exit 255
 
 [[ $# -eq 1 ]] || exit 237
 

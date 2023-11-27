@@ -1,4 +1,20 @@
 #!/system/bin/sh
+
+__eval() {
+#	local var="${1}"
+	eval $1=\"$(eval echo \$$1)\"
+	typeset -g $1
+}
+
+CC=gcc-13
+CPP='${CC} -E'
+echo $CPP
+__eval CPP
+echo $CPP
+exit 0
+
+case "${1:-clang}" in
+	clang)
 cat << '_EOF_'
 CC='ccache clang --target=aarch64-linux-android28'
 CXX='ccache clang++ --target=aarch64-linux-android28'
@@ -10,3 +26,13 @@ LDFLAGS='-Wl,-O1 -Wl,-z,now -Wl,-z,relro -Wl,-z,combreloc -Wl,-z,noexecstack -Wl
 MAKEFLAGS='-j4'
 export CC CXX WARNFLAGS CPPFLAGS CFLAGS CXXFLAGS LDFLAGS MAKEFLAGS
 _EOF_
+;;
+
+	gcc)
+		cat << '_EOF_'
+CC='gcc-13'
+CXX='g++-13'
+CPP='${CC} -E'
+CXXCPP='${CXX} -E'
+_EOF_
+

@@ -1,11 +1,11 @@
 #!/system/bin/env bash
 
-. ~/etc/functions.d/msg.sh
-. ~/etc/functions.d/debug.sh
+. ~/etc/bash/functions.d/msg.sh
+. ~/etc/bash/functions.d/debug.sh
 
 _strict on
 
-OUT='/sdcard/adbfu.log'
+OUT='./adbfu.log'
 ADB_SHELL=''
 MODE=''
 USER="${USER:-`whoami`}"
@@ -18,15 +18,25 @@ _cleanup() {
   exit
 }
 
-_pm() {
-  (( DEBUG )) && _msg "$bold${red}EXEC${wht}  pm $@\n"
+usage() {
+	msg "Usage: $(basename $0) <OPERATION> [PKG LIST]" 1>&2
+	msg "  OPERATION is one of ..."
+	msg "      -c|--clear"
+	msg "      -l|--list"
+	msg "      -r|--remove"
+ 	msg "      -p|--print-label"
+	exit ${1:-255}
+}
+
+adb_pm() {
+  (( DEBUG )) && msg "$bold${red}EXEC${wht}  pm $@\n"
 	adb shell pm "$@" 2>>$OUT
 }
 
 list_permissions() {
 	case "${1:-fuckit}" in
 		sys*)
-			_pm list permissions | sed 's,^permission:,,' | sort
+			adb_pm list permissions | sed 's,^permission:,,' | sort
 			;;
 		*)
 			;;
@@ -45,15 +55,15 @@ list_packages() {
 			;;
 	esac
 
-	_pm list packages $pm_arg | sed 's,^package:,,' | sort
+	adb_pm list packages $pm_arg | sed 's,^package:,,' | sort
 }
 
 list_system_pkgs() {
-  _pm list packages -s | sed 's,^package:,,' | sort
+  adb_pm list packages -s | sed 's,^package:,,' | sort
 }
 
 get_user_ids() {
-	_pm list users | \
+	adb_pm list users | \
 		grep 'UserInfo' | \
 		sed 's,^.*Info{\([0-9]*\):.*:.*}.*$,\1,'
 }
@@ -63,7 +73,7 @@ get_user_name() {
 	local user
 
 	for user in $users; do
-		read num name <<< $(_pm list users | \
+		read num name <<< $(adb_pm list users | \
 				grep 'UserInfo' | \
 				sed 's,^.*Info{\([0-9]*\):\([A-Za-z].*[A-Za-z]\):c[0-9]*}.*$,\1 \2,')
 
@@ -79,7 +89,7 @@ get_pkg_label() {
   [[ $# -eq 1 ]] || return 1
 
   local pkgname="$1"
-  local pkgpath="$(_pm path $pkgname | \
+  local pkgpath="$(adb_pm path $pkgname | \
                    sed 's,^package:,,')"
 
   _nofail -s adb pull "$pkgpath" "$pkgname.apk"
@@ -101,7 +111,7 @@ get_pkg_labels() {
 #    if [ $(tput colors) -ge 8 ]; then
 #      _msg "$bold$mag$pkgname$rst='$label'\n"
 #    else
-      _msg "$pkgname='$label'\n"
+      msg "$pkgname='$label'"
 #    fi
   done  
 }
@@ -113,18 +123,21 @@ clear_caches() {
 
   echo
 
-  _msg "$bold${cyn}removing app cache/dex files...\n"
+  msg "$bold${cyn}removing app cache/dex files..."
   for pkg in $(list_packages); do
     case $pkg in
       android*)
         continue ;;
+			com.termux*)
+				continue ;;
     esac
 
     _info "$pkg"
-    _pm clear --user 0 --cache-only $pkg &>/dev/null || true
-    _pm delete-dexopt $pkg &>/dev/null || true
-    _pm compile -f -m space-profile $pkg &>/dev/null || true
-    _pm reconcile-secondary-dex-files $pkg &>/dev/null || true
+    adb_pm clear --user 0 --cache-only $pkg &>/dev/null || true
+		adb_pm clear --user 10 --cache-only $pkg &>/dev/null || true
+    adb_pm delete-dexopt $pkg &>/dev/null || true
+#    adb_pm compile -f -m space-profile $pkg &>/dev/null || true
+    adb_pm reconcile-secondary-dex-files $pkg &>/dev/null || true
     _success
   done
 }
@@ -143,18 +156,18 @@ remove_package() {
 			_msg "${bold}removing $blu$pkg\n"
 
 			_info "uninstalling updates"
-			_pm uninstall-system-updates "$pkg" &>/dev/null || true
+			adb_pm uninstall-system-updates "$pkg" &>/dev/null || true
       _success
 
       _info "resetting permissions"
-			_pm reset-permissions "$pkg" &>/dev/null || true
-			_pm clear "$pkg" &>/dev/null || true
+			adb_pm reset-permissions "$pkg" &>/dev/null || true
+			adb_pm clear "$pkg" &>/dev/null || true
 			_success
 
 			for user in $(get_user_ids); do
 				_info "disabling for user $user"
-				_pm uninstall -k --user "$user" "$pkg" &>/dev/null || true
-				_pm disable-user --user "$user" "$pkg" &>/dev/null || true
+				adb_pm uninstall -k --user "$user" "$pkg" &>/dev/null || true
+				adb_pm disable-user --user "$user" "$pkg" &>/dev/null || true
 				_success
 			done
 
@@ -192,23 +205,26 @@ fi
 
 while [ -n "${1:-}" ]; do
 	case $1 in
-    clea*)
+    -c|--clear)
       MODE='clear'
       shift 1
       ;;
-    list)
+    -l|--list)
       MODE='list'
       MODE_SUB="$2"
       shift 2
       ;;
-		rm|remove)
+		-r|--remove)
 			MODE='remove'
 			shift 1
 			;;
-    label)
+    -p|--print-label)
       MODE='label'
       shift 1
       ;;
+		-h|--help)
+			usage 0
+			;;
 		-*)
 			exit 255
 			;;

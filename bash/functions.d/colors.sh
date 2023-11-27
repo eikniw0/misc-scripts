@@ -1,10 +1,22 @@
 #!/system/bin/env bash
+#
+# Name: colors.sh
+# Version: 0.2
+# Updated: Fri 17 Nov 2023 09:54 PST
+# Author: Zack Winkles <hymenaeus0@disroot.org>
+# Description:
+#   A demonstration of how to properly use the global bash script functions
+#   in your own scripts.  Wait, that's unrealistic, it's just for me to
+#   be lazy and copy for when I write new stuff--keep things kinda
+#   standardized...  (Me? Standardized? Hah!)
+#
+
+#GLOBAL_FUNCTIONS_ROOT=~/etc/bash/functions.d
+#. "${GLOBAL_FUNCTIONS_ROOT}/msg.sh" || return 1
+#. "${GLOBAL_FUNCTIONS_ROOT}/debug.sh" || return 1
 
 [[ -n "${__COLORS_SH:-}" ]] && return
 __COLORS_SH=1
-
-FUNCTIONS_ROOT="$HOME/etc/bashfuncs.d"
-# source "$FUNCTIONS_ROOT/print.sh" || exit 1
 
 
 init_colors() {

@@ -1,7 +1,7 @@
 #!/system/bin/env bash
 
-. ~/etc/functions.d/msg.sh || exit 1
-. ~/etc/functions.d/debug.sh || exit 1
+. ~/etc/bash/functions.d/msg.sh || exit 1
+. ~/etc/bash/functions.d/debug.sh || exit 1
 
 _strict on
 
@@ -28,10 +28,11 @@ for input in ${INPUTS[@]}; do
 	mkdir -p "$POOL/$input"
 	for file in $(ls ${input}*); do
 		case "$file" in
-			*.tar.zst)
+			*.tar.zst|*.tzst|*.tar.xz|*.txz|*.tar.bz2|*.tbz2|*.tar.lz|*.tlz|*.tar.gz|*.tgz)
 				if [ -r "$file" ]; then
-					_info "moving '$cyn$file$wht' to '$blu\$POOL/$input$wht'"
-					_nofail mv -f "$file" "$POOL/$input"/ 2>/dev/null
+					dir="$(basename $input | tr A-Z a-z)"
+					_info "moving '$cyn$file$wht' to '$blu\$POOL/$dir$wht'"
+					_nofail mv -f "$file" "$POOL/$dir"/ 2>/dev/null
 					_success
 				fi
 				;;

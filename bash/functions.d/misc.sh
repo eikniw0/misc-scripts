@@ -1,5 +1,5 @@
 
-. ~/etc/bashfuncs.d/msg.sh
+. ~/etc/bash/functions.d/msg.sh
 
 
 # same as basename(1) except using shell string substitutiom,

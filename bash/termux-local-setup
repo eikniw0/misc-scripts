@@ -1,21 +1,30 @@
 #!/system/bin/env bash
 
-FUNC_DIR=~/etc/functions.d; export FUNC_DIR
+FUNC_DIR=~/etc/bash/functions.d; export FUNC_DIR
 . "$FUNC_DIR/msg.sh" || exit 1
 #. "$FUNC_DIR/confirm.sh" || exit 1
 . "$FUNC_DIR/debug.sh" || exit 1
 
 _strict on
 
-declare -ga PKGS=()
+NALA=1
 
-INSTALL_PYTHON=1
-INSTALL_PACMAN=1
-INSTALL_TOR=0
+PYTHON=1
+PACMAN=1
+TOR=1
+
+STATIC_LIBS=1
+RUBY=1
+NODEJS=1
+LUA=1
+LUA_VERS=5.4
+RPM=1
+GRADLE=1
 
 REPOS=(root-repo
        x11-repo
-       tur-repo)
+       tur-repo
+       )
 
 BASE_PKGS=(vim
            less
@@ -42,7 +51,59 @@ BASE_PKGS=(vim
            termux-services
            vivid
            fortune
-           ccache)
+           ccache
+           libgmp
+		   libmpfr
+		   libmpc
+	       libisl
+		   libpopt
+		   android-tools
+           aapt
+		   aapt2
+		   tcl
+		   expect
+		   check
+		   yarn
+		   quilt
+           )
+
+
+COMPRESSION_LIBS=(
+	zlib
+	pigz
+	zstd
+	pzstd
+	liblzma
+	xz-utils
+	pixz
+	liblz4
+	lz4
+	liblzo
+	lzop
+	lzlib
+	lzip
+	plzip
+	zopfli
+    )
+if (( STATIC_LIBS )); then
+	COMPRESSION_LIBS+=(zlib-static
+					   zstd-static
+					   liblzma-static
+					   liblzo-static
+					   lzlib-static
+				       )
+fi
+
+if (( STATIC_LIBS )); then
+	BASE_PKGS+=(libgmp-static
+				libmpfr-static
+				libmpc-static
+				libisl-static
+				libunistring-static
+				libiconv-static
+				libpopt-static
+			    )
+fi
 
 PKGS=(apt-file
       elinks
@@ -60,6 +121,7 @@ PKGS=(apt-file
       make-guile
       guile
       gh
+	  glab-cli
       anacron
       graphviz
       doxygen
@@ -67,15 +129,54 @@ PKGS=(apt-file
       xmlto
       )
 
+if (( STATIC_LIBS )); then
+	PKGS+=(guile-static
+	       libxml2-static
+		   libxslt-static
+	       )
+fi
+
+
 PYTHON_PKGS=(python
              python-pip
-             python-ensurepip-wheels)
+		 )
 
-PY3_MODULES=(psutil
+PY3_MODULES=(wheel
+	         setuptools
+			 pylint
+			 jinja2
+             psutil
              meson
-             portage)
+			 sphinx
+		     )
 
 RB_GEMS=(fpm)
+
+NPM_MODULES=(acodeX-server)
+
+LUA_PKGS=(lua51
+	        liblua51
+					luarocks
+					lua${LUA_VERS/.}
+					liblua${LUA_VERS/.}
+					luarocks
+			  	)
+if (( STATIC_LIBS )); then	
+	LUA_PKGS+=(liblua51-static
+					   liblua${LUA_VERS/.}-static
+  					 )
+fi
+
+if (( RPM )); then
+	BASE_PKGS+=(cpio rpm)
+	PY3_MODULES+=(rpmlint)
+fi
+
+if [ -x "$(type -p nala)" ]; then
+	declare -g NALA_INSTALLED=1
+else
+	declare -g NALA_INSTALLED=0
+fi
 
 # Termux Package Manager
 pm_update() {
@@ -90,26 +191,37 @@ pm_update() {
 }
 
 pm_install() {
-  [[ -n "${TERMUX_APP__PACKAGE_MANAGER:-}" ]] || return 1
+	[[ -n "${TERMUX_APP__PACKAGE_MANAGER:-}" ]] || return 1
 
-  if [ "$TERMUX_APP__PACKAGE_MANAGER" = 'apt' ]; then
-    _nofail apt-get install -y "$@"
-  else
-    _nofail pacman -S --noconfirm \
-      --overwrite '*/data/*' "$@"
-  fi
+	local pkg
+
+	for pkg in "$@" ; do
+		if [ "$TERMUX_APP__PACKAGE_MANAGER" = 'apt' ]; then
+	#		if (( NALA_INSTALLED )); then
+	#			_nofail nala install -y "$pkg"
+	#		else
+				_nofail apt-get install -y "$pkg"
+	#		fi
+		else
+			_nofail pacman -S --noconfirm \
+				--overwrite '*/data/*' "$pkg"
+		fi
+	done
 }
 
 pm_update
+pm_install "${REPOS[@]}"
 
-for repo in ${REPOS[@]} ; do
-  pm_install "$repo"
-done
+if (( NALA )); then
+	pm_install python python-apt python-pip
+	pip install nala
+	declare -g NALA_INSTALLED=1
+fi
 
-pm_install libtree-ldd
-ln -sfv libtree $PREFIX/bin/ldd
+pm_install libtree-ldd ldd
 
-for bin in toybox file mount umount losetup; do
+pm_install mount-utils mksh # for the manpages, mostly
+for bin in toybox mount umount losetup; do
 	ln -sfv /system/bin/$bin $PREFIX/bin/$bin
 done
 
@@ -123,9 +235,40 @@ exec grep -F "$@"
 eof
 chmod +x $PREFIX/bin/{e,f}grep
 
+for lib in "${COMPRESSION_LIBS[@]}"; do
+	pm_install "$lib"
 
-if (( INSTALL_PACMAN )); then
-	pm_install pacman
+	case "$lib" in
+		pigzfoo)
+			cd "$PREFIX"/bin
+			[ -f gzip ] && mv -v gzip gzip.bak
+			[ -f gunzip ] && mv -v gunzip gunzip.bak
+			ln -sv pigz gzip
+			ln -sv unpigz gunzip
+			cd -
+			;;
+		pixzfoo)
+			cd "$PREFIX"/bin
+			[ -f xz ] && mv -v xz xz.bak
+			[ -f unxz ] && mv -v unxz unxz.bak
+			ln -sv pixz xz
+			ln -sv unpixz unxz
+			cd -
+			;;
+		plzipfoo)
+			cd "$PREFIX"/bin
+            [ -f lzip ] && mv -v lzip lzip.bak
+			[ -f lunzip ] && mv -v lunzip lunzip.bak
+            ln -sv plzip lzip
+            ln -sv plzip lunzip
+            cd -
+            ;;
+	esac
+done
+
+
+if (( PACMAN )); then
+	pm_install pacman pacman-contrib
 
 	if [ ! -d "$PREFIX/etc/pacman.d/gnupg" ]; then
 		_nofail pacman-key --init
@@ -136,22 +279,55 @@ if (( INSTALL_PACMAN )); then
 fi
 
 
-for pkg in ${BASE_PKGS[@]} ; do
+for pkg in "${BASE_PKGS[@]}" "${PKGS[@]}" ; do
 	pm_install "$pkg"
 done
 
-if (( INSTALL_PYTHON )); then
-  for pkg in ${PYTHON_PKGS[@]} ; do
-    pm_install "$pkg"
-  done
+if (( PYTHON )); then
+  pm_install ${PYTHON_PKGS[@]}
 
   for module in ${PY3_MODULES[@]} ; do
     pip install "$module"
   done
 fi
+unset module
 
-if (( INSTALL_TOR )); then
+if (( RUBY )); then
+	pm_install ruby
+
+	gem update
+	gem upgrade
+	for gem in ${RB_GEMS} ; do
+		gem install $gem
+	done
+fi
+unset gem
+
+if (( NODEJS )); then
+	pm_install nodejs
+
+	for npmmod in "${NPM_MODULES}" ; do
+		npm i -g "${npmmod}"
+	done
+fi
+unset npmmod
+
+if (( LUA )); then
+	for pkg in "${LUA_PKGS[@]}" ; do
+		pm_install "$pkg"
+	done
+
+	luarocks config lua_version "$LUA_VERS"
+fi
+
+if (( GRADLE )); then
+	pm_install ndk-multilib ndk-multilib-native-stubs
+	(( STATIC_LIBS )) && pm_install ndk-multilib-native-static
+	pm_install x11-repo openjdk-17 openjdk-17-x gradle
+fi
+
+if (( TOR )); then
 	pm_install tor apt-transport-tor
 fi
 
-# vim: ts=2 sw=2 ft=bash
+# vim: ft=bash ts=4 sw=4 ai noet

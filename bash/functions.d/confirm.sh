@@ -1,10 +1,16 @@
 #!/system/bin/env bash
 
-[[ -n "${__NORMALIZE_SH:-}" ]] && return
-__NORMALIZE_SH=1
+[[ -n "${__TEMPLATE_SH__:-}" ]] \
+  && [[ -z "${FORCE_RELOAD:-}" ]] && return
+__GLOBAL_SCRIPTS__+=( "$(basename $0)" )
+for ((i=0; i<${!__GLOBAL_SCRIPTS__[@]}; i++))
+  test ${__LOADED__[$i]} = $(basename $0) && return
 
-FUNCTIONS_ROOT="$HOME/etc/bashfuncs.d"
-. "$FUNCTIONS_ROOT/msg.sh" || exit 1
+printf "${__GLOBAL_SCRIPTS__[@]}\n"
+
+GLOBAL_FUNCTIONS_ROOT=~/etc/bash/functions.d
+. "${GLOBAL_FUNCTIONS_ROOT}/msg.sh" || return 1
+. "${GLOBAL_FUNCTIONS_ROOT}/debug.sh" || retur
 
 declare -ga INPUTS=()
 
@@ -60,9 +66,8 @@ for (( i=0; i<${#INPUTS[@]}; i++ )); do
   _info "compressing '${cyn}$in${rst}' with zstd\n"
   _zstd "$in"
 
-  
+
 
 done
-
 
 # vim: ts=2 sw=2 ft=sh
