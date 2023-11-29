@@ -2,24 +2,15 @@
 
 FUNC_DIR=~/etc/bash/functions.d; export FUNC_DIR
 . "$FUNC_DIR/msg.sh" || exit 1
-#. "$FUNC_DIR/confirm.sh" || exit 1
+. "$FUNC_DIR/confirm.sh" || exit 1
 . "$FUNC_DIR/debug.sh" || exit 1
 
 _strict on
 
-NALA=1
+confirm "Install static libraries alongside shared?" \
+	&& STATIC_LIBS=1 || STATIC_LIBS=0
 
-PYTHON=1
-PACMAN=1
-TOR=1
-
-STATIC_LIBS=1
-RUBY=1
-NODEJS=1
-LUA=1
 LUA_VERS=5.4
-RPM=1
-GRADLE=1
 
 REPOS=(root-repo
        x11-repo
@@ -63,8 +54,10 @@ BASE_PKGS=(vim
 		   tcl
 		   expect
 		   check
-		   yarn
 		   quilt
+		   rsync
+		   wget
+		   wget2
            )
 
 
@@ -75,7 +68,6 @@ COMPRESSION_LIBS=(
 	pzstd
 	liblzma
 	xz-utils
-	pixz
 	liblz4
 	lz4
 	liblzo
@@ -85,6 +77,9 @@ COMPRESSION_LIBS=(
 	plzip
 	zopfli
     )
+[[ "$TERMUX_MAIN_PACKAGE_FORMAT" = 'apt' ]] \
+	&& COMPRESSION_LIBS+=(pixz)
+
 if (( STATIC_LIBS )); then
 	COMPRESSION_LIBS+=(zlib-static
 					   zstd-static
@@ -116,6 +111,22 @@ PKGS=(apt-file
       binutils-gold
       llvmgold
       mold
+	  autoconf
+    automake
+    bc
+    bison
+    cmake
+	cmake-curses-gui
+    flex
+    gperf
+    libtool
+    m4
+    golang
+    proot
+    python
+    ruby
+    rust
+    subversion
       shellcheck
       hstr
       make-guile
@@ -139,6 +150,7 @@ fi
 
 PYTHON_PKGS=(python
              python-pip
+			 python-cryptography
 		 )
 
 PY3_MODULES=(wheel
@@ -167,6 +179,9 @@ if (( STATIC_LIBS )); then
   					 )
 fi
 
+confirm "Install RedHat Package Manager?" \
+	&& RPM=1 || RPM=0
+
 if (( RPM )); then
 	BASE_PKGS+=(cpio rpm)
 	PY3_MODULES+=(rpmlint)
@@ -180,28 +195,28 @@ fi
 
 # Termux Package Manager
 pm_update() {
-  [[ -n "${TERMUX_APP__PACKAGE_MANAGER:-}" ]] || return 1
+  [[ -n "${TERMUX_MAIN_PACKAGE_FORMAT:-}" ]] || return 1
 
-  if [ "$TERMUX_APP__PACKAGE_MANAGER" = 'apt' ]; then
+  if [ "$TERMUX_MAIN_PACKAGE_FORMAT" = 'apt' ]; then
     _nofail apt-get update
     _nofail apt-get full-upgrade -y
   else
-    _nofail pacman -Syu
+    _nofail pacman -Syu --noconfirm
   fi
 }
 
 pm_install() {
-	[[ -n "${TERMUX_APP__PACKAGE_MANAGER:-}" ]] || return 1
+	[[ -n "${TERMUX_MAIN_PACKAGE_FORMAT:-}" ]] || return 1
 
 	local pkg
 
 	for pkg in "$@" ; do
-		if [ "$TERMUX_APP__PACKAGE_MANAGER" = 'apt' ]; then
-	#		if (( NALA_INSTALLED )); then
-	#			_nofail nala install -y "$pkg"
-	#		else
+		if [ "$TERMUX_MAIN_PACKAGE_FORMAT" = 'apt' ]; then
+			if (( NALA_INSTALLED )); then
+				_nofail nala install -y "$pkg"
+			else
 				_nofail apt-get install -y "$pkg"
-	#		fi
+			fi
 		else
 			_nofail pacman -S --noconfirm \
 				--overwrite '*/data/*' "$pkg"
@@ -210,13 +225,13 @@ pm_install() {
 }
 
 pm_update
-pm_install "${REPOS[@]}"
+[[ "$TERMUX_MAIN_PACKAGE_FORMAT" = 'apt' ]] \
+	&& pm_install "${REPOS[@]}"
 
-if (( NALA )); then
-	pm_install python python-apt python-pip
-	pip install nala
-	declare -g NALA_INSTALLED=1
-fi
+#dfffif (( NALA )); then
+#	pm_install python python-apt python-pip nala
+#	declare -g NALA_INSTALLED=1
+#fi
 
 pm_install libtree-ldd ldd
 
@@ -239,7 +254,7 @@ for lib in "${COMPRESSION_LIBS[@]}"; do
 	pm_install "$lib"
 
 	case "$lib" in
-		pigzfoo)
+		pigz)
 			cd "$PREFIX"/bin
 			[ -f gzip ] && mv -v gzip gzip.bak
 			[ -f gunzip ] && mv -v gunzip gunzip.bak
@@ -247,7 +262,7 @@ for lib in "${COMPRESSION_LIBS[@]}"; do
 			ln -sv unpigz gunzip
 			cd -
 			;;
-		pixzfoo)
+		pixz)
 			cd "$PREFIX"/bin
 			[ -f xz ] && mv -v xz xz.bak
 			[ -f unxz ] && mv -v unxz unxz.bak
@@ -255,7 +270,7 @@ for lib in "${COMPRESSION_LIBS[@]}"; do
 			ln -sv unpixz unxz
 			cd -
 			;;
-		plzipfoo)
+		plzip)
 			cd "$PREFIX"/bin
             [ -f lzip ] && mv -v lzip lzip.bak
 			[ -f lunzip ] && mv -v lunzip lunzip.bak
@@ -266,9 +281,10 @@ for lib in "${COMPRESSION_LIBS[@]}"; do
 	esac
 done
 
-
+confirm "Install pacman and co.? (pacman-contrib, pacutils, etc.)" \
+	&& PACMAN=1 || PACMAN=0
 if (( PACMAN )); then
-	pm_install pacman pacman-contrib
+	pm_install pacman pacman-contrib pacutils fakepkg
 
 	if [ ! -d "$PREFIX/etc/pacman.d/gnupg" ]; then
 		_nofail pacman-key --init
@@ -280,18 +296,24 @@ fi
 
 
 for pkg in "${BASE_PKGS[@]}" "${PKGS[@]}" ; do
-	pm_install "$pkg"
+	confirm "Install \"${bold}${cyn}${pkg}${rst}\"?" \
+		&& pm_install "$pkg"
 done
 
+confirm "Install Python 3?" \
+	&& PYTHON=1 || PYTHON=0
 if (( PYTHON )); then
   pm_install ${PYTHON_PKGS[@]}
 
   for module in ${PY3_MODULES[@]} ; do
-    pip install "$module"
+	  confirm "Python 3 module -- \"$module\"?" \
+		  && pip install "$module"
   done
 fi
 unset module
 
+confirm "Ruby?" \
+	&& RUBY=1 || RUBY=0
 if (( RUBY )); then
 	pm_install ruby
 
@@ -303,8 +325,10 @@ if (( RUBY )); then
 fi
 unset gem
 
+NODEJS=1
 if (( NODEJS )); then
 	pm_install nodejs
+	pm_install yarn
 
 	for npmmod in "${NPM_MODULES}" ; do
 		npm i -g "${npmmod}"
@@ -312,6 +336,8 @@ if (( NODEJS )); then
 fi
 unset npmmod
 
+LUA=1
+LUA_VERS=5.4
 if (( LUA )); then
 	for pkg in "${LUA_PKGS[@]}" ; do
 		pm_install "$pkg"
@@ -320,12 +346,14 @@ if (( LUA )); then
 	luarocks config lua_version "$LUA_VERS"
 fi
 
+GRADLE=1
 if (( GRADLE )); then
 	pm_install ndk-multilib ndk-multilib-native-stubs
 	(( STATIC_LIBS )) && pm_install ndk-multilib-native-static
 	pm_install x11-repo openjdk-17 openjdk-17-x gradle
 fi
 
+TOR=0
 if (( TOR )); then
 	pm_install tor apt-transport-tor
 fi

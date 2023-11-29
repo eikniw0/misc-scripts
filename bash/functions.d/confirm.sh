@@ -1,73 +1,73 @@
 #!/system/bin/env bash
 
-[[ -n "${__TEMPLATE_SH__:-}" ]] \
-  && [[ -z "${FORCE_RELOAD:-}" ]] && return
-__GLOBAL_SCRIPTS__+=( "$(basename $0)" )
-for ((i=0; i<${!__GLOBAL_SCRIPTS__[@]}; i++))
-  test ${__LOADED__[$i]} = $(basename $0) && return
+#[[ -n "${__CONFIRM_SH:-}" ]] && return
+#__CONFIRM_SH=1
 
-printf "${__GLOBAL_SCRIPTS__[@]}\n"
+FUNCTIONS_ROOT=~/etc/bash/functions.d
+. "${FUNCTIONS_ROOT}"/msg.sh || return 1
 
-GLOBAL_FUNCTIONS_ROOT=~/etc/bash/functions.d
-. "${GLOBAL_FUNCTIONS_ROOT}/msg.sh" || return 1
-. "${GLOBAL_FUNCTIONS_ROOT}/debug.sh" || retur
+##
+## confirm [-t NUM] [-d DEFAULT] [-p TEXT] [-s] -- <MESSAGE>
+##
+##   <MESSAGE> will be displayed every ten or so rounds of
+##             prompting.  Pass --silent for absolute silence.
+##   -t|--timeout specifies an optional maximum wait time in
+##             seconds before going with ...
+##   -d|--default specifies whether YES or NO should be chosen once
+##             the timeout has been reached
+##   -p|--prompt specifies the prompt shown EVERYTIME, and thus is
+##             more minimal than MESSAGE
+##   -s|--silent print nothing--absolutely fucking nothing AT ALL
+##
+confirm() {
+	[[ -n "${1:-}" ]] || return 1
 
-declare -ga INPUTS=()
+	local timeout=0
+	local default='N'
+	local message=''
+	local prompt=$"${rst}${dim}•${rst}${bold}${grn}y${rst}${dim}/${rst}${bold}${red}N${rst}${dim}•${rst}"
+	local input
 
-for arg in "$@"; do
-  case "$1" in
-    -h|--help)
-      usage
-      exit 0
-      ;;
+	case "${1:-}" in
+		-*)
+			while [ -n "${1:-}" ]; do
+				case "$1" in
+					-t|--timeout) timeout="$2"; shift 1;;
+					-t=*|--timeout=*) timeout="${1/*=}";;
+					-d|--default) default="$2"; shift 1;;
+					-d=*|--default=*) default="${1/*=}";;
+					-p|--prompt) prompt="$2"; shift 1;;
+					-p=*|--prompt=*) prompt="${1/*=}";;
+					-s|--silent) prompt=''; message='';;
+					--) shift 1; message="${@:-}"; break;;
+				esac
+				shift 1
+			done
+			;;
+		*)
+			message="${@:-}"
+			;;
+	esac
 
-    -*)
-      _fatal "Unknown argument: '$arg'.\n"
-      ;;
+	printf "$message"
 
-    *)
-      INPUTS+=("$arg")
-      ;;
+	while true; do
+		printf " $prompt "
 
-  esac
-done
+		read -N 1 -r -s input
 
+		echo
+		case "${input:-}" in
+			Y|y)
+				return 0 ;;
+			N|n)
+				return 1 ;;
+			*)
+				msg "Invalid input: \"$input\"\n"
+				sleep 1
+				continue ;;
+		esac
+	done
+}
 
-for (( i=0; i<${#INPUTS[@]}; i++ )); do
-  in="${INPUTS[$i]}"
-
-  if [ ! -r "$in" ]; then
-    _error "Input file '$in' is not readable! Skipping it...\n"
-    continue
-  fi
-
-  case "$in" in
-    *.gz)
-      _gunzip "$in"
-      in="${in/.gz}"
-      ;;
-
-    *.bz2)
-      _bunzip "$in"
-      in="${in/.bz2}"
-      ;;
-
-    *.xz)
-      _unxz "$in"
-      in="${in/.xz}"
-      ;;
-
-    *)
-      _error "Unknown file type: '$in'\n"
-      continue
-      ;;
-  esac
-
-  _info "compressing '${cyn}$in${rst}' with zstd\n"
-  _zstd "$in"
-
-
-
-done
-
-# vim: ts=2 sw=2 ft=sh
+# vim: ft=bash ts=4 sw=4 noet ai

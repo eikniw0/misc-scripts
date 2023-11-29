@@ -18,6 +18,37 @@ _cleanup() {
   exit
 }
 
+
+##
+## parseArgs <ARGUMENTS LIST>
+##
+## Takes a list of arguments that includes both packages and
+## permissions, and returns two arrays containing the two split
+## nicely into their own arrays
+##
+parseArgs() {
+	[[ -n "${1:-}" ]] || bug 'parseArgs() called with no arguments!'
+
+	declare -g -a pkgList permList
+	local divFound=0
+
+	while [ -n "${1:-}" ]; do
+		case $1 in
+			'--')
+				divFound=1
+				;;
+			*)
+				if ! (( divFound )); then
+					pkgList+=( $1 )
+				else
+					permList+=( $1 )
+				fi
+				;;
+		esac
+		shift 1
+	done
+}
+
 usage() {
 	msg "Usage: $(basename $0) <OPERATION> [PKG LIST]" 1>&2
 	msg "  OPERATION is one of ..."
@@ -25,6 +56,15 @@ usage() {
 	msg "      -l|--list"
 	msg "      -r|--remove"
  	msg "      -p|--print-label"
+	exit ${1:-255}
+}
+
+usage_grant() {
+	msg "adbfu grant <APP> <PERMISSION(S)>"
+	msg "  APP can be either a single package name, or a group of"
+	msg "  packages, i.e., system, thirdparty, or all*."
+	msg "  PERMISSION is one or more Android system permissions, fully"
+	msg "  spelled out (no shortcuts)"
 	exit ${1:-255}
 }
 
@@ -60,6 +100,27 @@ list_packages() {
 
 list_system_pkgs() {
   adb_pm list packages -s | sed 's,^package:,,' | sort
+}
+
+##
+## grant_perms <PACKAGE> <PERMISSION> [PERMISSION2] ...
+##
+grant_perms() {
+	[ $# -ge 2 ] || return 1
+	local pkg="$1" ; shift
+	local perms=($@)
+	local tmpperm
+
+	case "$pkg" in
+		com.termux*) return ;;
+	esac
+
+	for tmpperm in "${perms[@]}" ; do
+		set +e
+		adb_pm grant $pkg $tmpperm &&
+			msg "$bold$blu$pkg $rst-> $bold$cyn$tmpperm ${grn}granted$rst"
+		set -e
+	done
 }
 
 get_user_ids() {
@@ -111,7 +172,7 @@ get_pkg_labels() {
 #    if [ $(tput colors) -ge 8 ]; then
 #      _msg "$bold$mag$pkgname$rst='$label'\n"
 #    else
-      msg "$pkgname='$label'"
+      msg "$pkgname\t$label"
 #    fi
   done  
 }
@@ -203,27 +264,49 @@ else
 	ADB_SHELL=0
 fi
 
+declare -g -a pkgList permList
+
 while [ -n "${1:-}" ]; do
 	case $1 in
-    -c|--clear)
+    c|clear)
       MODE='clear'
       shift 1
       ;;
-    -l|--list)
-      MODE='list'
-      MODE_SUB="$2"
-      shift 2
+		g|grant)
+			case "${2:-help}" in
+				''|help|-h|--help) usage_grant ;;
+				system) pkgList=( $(list_packages system) ) ;;
+				user)   pkgList=( $(list_packages user) ) ;;
+			esac
+			shift 1
+			parseArgs "${@:-}"
+			for pkg in "${pkgList[@]}" ; do
+				grant_perms $pkg "${permList[@]}"
+			done
+			exit 0
+			;;
+    l|list)
+      sub="${2:-}"
+			list_packages "$sub"
+			exit 0
       ;;
-		-r|--remove)
+		r|remove)
 			MODE='remove'
 			shift 1
 			;;
-    -p|--print-label)
+    p|print-label)
       MODE='label'
       shift 1
       ;;
-		-h|--help)
-			usage 0
+		h|help)
+			case "${2:-}" in
+				clear)  usage_clear ;;
+				grant)  usage_grant ;;
+				list)   usage_list ;;
+				remove) usage_remove ;;
+				print*) usage_print_label ;;
+				*)      usage 0 ;;
+			esac
 			;;
 		-*)
 			exit 255
@@ -238,9 +321,6 @@ done
 case "$MODE" in
   clear)
     clear_caches
-    ;;
-  list)
-    list_packages $MODE_SUB
     ;;
   label)
     get_pkg_labels $PKGS
